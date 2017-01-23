@@ -71,11 +71,7 @@ fprintf('=======================START ITERATIONS========================\n')
 
 %% When the sampling covariance Gamma is known: Normal-Normal case.
 if GammaKnown == 1
-    iGamma = inv(Gamma);
-    last_mu = zeros(r,probUpdate)';
-    last_Lambda = zeros(r,r*probUpdate)';
-    last_iLambda = zeros(r,r*probUpdate)';
-    
+    iGamma = inv(Gamma);    
     n=1;
     while (n <= maxIte)
         fprintf('Iteration %d: \n', n);
@@ -101,20 +97,22 @@ if GammaKnown == 1
         
         % In case Lambda becomes singular due to numerical error.
         minEig = min(eig(Lambda));
-        fprintf('Min eigenvalue of Lambda before adjuested: %d \n', minEig);
+        fprintf('Min eigenvalue of Lambda before adjusted: %d \n', minEig);
         while minEig < 0
             Lambda = perturbPSD(Lambda, minEig);
             minEig = min(eig(Lambda));
-            fprintf('Min eigenvalue of Lambda after adjuested: %d \n', minEig);
+            fprintf('Min eigenvalue of Lambda after adjusted: %d \n', minEig);
         end
         Lambdahalf = sqrtm(Lambda);
-        Y = Nrand*Lambdahalf + ones(K,1)*mu;
         
         % DIFFERENT METHODS
         switch method
             % Vanilla MC --------------------------------------------------
             case 0
                 tic;
+                % Generate new samples from posterior
+                Nrand =  mvnrnd(zeros(1,r),eye(r),K);
+                Y = Nrand*Lambdahalf + ones(K,1)*mu;
                 Ind = IndConvexVanillaMC(Y, x);
                 [ phat(n), stdev(n), half(n) ] = MonteCarlo(Ind);
                 time(n) = toc;
@@ -126,14 +124,20 @@ if GammaKnown == 1
             % Conditional MC ----------------------------------------------
             case 1
                 tic;
-                % the first initialItn iterations
+                % For the first initialItn iterations and every probUpdate
+                % iterations, use a brand new set of samples.
                 if (n <= initialItn) || (mod((n - initialItn), probUpdate) == 0)
+                    % Generate new samples from posterior
+                    Nrand =  mvnrnd(zeros(1,r),eye(r),K);
+                    Y = Nrand*Lambdahalf + ones(K,1)*mu;
                     [ p, I ] = pnConvexCondMC(Nrand, x, mu, Lambdahalf, [], GammaKnown);
                     last_mu = mu;
                     last_Lambda = Lambda;
                     last_iLambda = iLambda;
                     last_I = I;
                 else
+                % Otherwise reuse the samples like Change of Measure method
+                % if requested.
                     LR = LRnormal( Y, last_mu, last_Lambda, last_iLambda, mu, Lambda, iLambda );
                     I = LR.*last_I;
                     p = mean(I);
@@ -142,18 +146,19 @@ if GammaKnown == 1
                 time(n) = toc;
                 efficiency(n) = 1/(time(n) * stdev(n)^2);
                 fprintf('CI for Pconvex from p: %.2e +/- %.2e. \n', phat(n), half(n));
-                fprintf('CI for Pconvex from 1 - p: %.2e +/- %.2e. \n', 1 - mphat(n), mhalf(n));
                 fprintf('time of the iteration: %.2f. \n', time(n));
                 fprintf('Efficiency (1/sigma^2t) of the iteration: %.2f. \n', efficiency(n));
 
             % Change of Measure -------------------------------------------
             case 2
                 tic;
-
                 % For the first initialItn and every probUpdate iterations
                 % after that, get brand new set of samples.
                 if (n <= initialItn) || ...
                         (mod((n - initialItn), probUpdate) == 0)
+                    % Generate new samples from posterior
+                    Nrand =  mvnrnd(zeros(1,r),eye(r),K);
+                    Y = Nrand*Lambdahalf + ones(K,1)*mu;
                     I = IndConvexVanillaMC(Y, x);
                     last_mu = mu;
                     last_Lambda = Lambda;
@@ -177,35 +182,30 @@ if GammaKnown == 1
             case 3
                 tic;
                 rej = 0;
-                est = zeros(K,1);
-                % For the first initialItn and every probUpdate iterations
-                % after that, get brand new set of samples.
-                l = mod((n - initialItn), probUpdate);
-                if (n <= initialItn) || (l == 0)
-                    % Record the last estimators when a complete new set of
-                    % samples was obtained.
+                % For the first initialItn, use newly generated set of 
+                % samples to calculate the estimators.
+                if (n <= initialItn) || (mod((n-initialItn),probUpdate)==0)
+                    % Generate new samples from posterior
+                    Nrand =  mvnrnd(zeros(1,r),eye(r),K);
+                    Y = Nrand*Lambdahalf + ones(K,1)*mu;
                     est = IndConvexVanillaMC(Y, x);
-                    last_est = est;
-                    last_Y = Y;             
-                    last_mu = mu;
-                    last_Lambda = Lambda;
-                    last_iLambda = iLambda;
                 else
-                    [ratio, c] = ARParam_Normal(l, last_Y, last_mu, last_iLambda, mu, iLambda, last_Lambda, Lambda, Gamma);
+                    % Between every probUpdate iterations, perform A/R on 
+                    % the samples from the last iteration.
+                    [ratio, c] = ARParam_Normal(1, Y, mu0, iLambda0, mu, iLambda, Lambda0, Lambda, Gamma);
                     rej = 0;
                     for k = 1:K
                         if rand() > ratio(k) / c
                             % Reject: generate a new sample and calculate the
                             % regarding indicator.
-                            new_sample = mvnrnd(zeros(1,r),eye(r),1)*Lambdahalf + mu;
-                            est(k) = IndConvexVanillaMC(new_sample, x);
+                            Y(k, :) = mvnrnd(zeros(1,r),eye(r),1)*Lambdahalf + mu;
+                            est(k) = IndConvexVanillaMC(Y(k, :), x);
                             rej = rej + 1;
-                        else
-                            % Accept: reuse the old indicator.
-                            est(k) = last_est(k);
                         end
                     end
                 end
+                
+                % Calculate the estimator.
                 [phat(n), stdev(n), half(n)] = MonteCarlo(est);
                 time(n) = toc;
                 efficiency(n) = 1/(time(n) * stdev(n)^2);
@@ -216,7 +216,7 @@ if GammaKnown == 1
             
         end % end of switch cases for method
         
-        % Use the posterior as the prior for next itn
+        % Use the posterior as the prior for next iteration
         mu0 = mu;
         Lambda0 = Lambda;
         iLambda0 = iLambda;
@@ -225,11 +225,6 @@ if GammaKnown == 1
     
 %% When the sampling covariance Gamma is unknown: Normal-inv-Wishart case.
 elseif GammaKnown == 0  
-    last_mu = zeros(r,probUpdate)';
-    last_Sigma = zeros(r,r*probUpdate)';
-    last_kappa = zeros(1,probUpdate)';
-    last_nu = zeros(1,probUpdate)';
-    
     n = 1;
     while (n <= maxIte)
         fprintf('Iteration %d: \n', n);
@@ -249,6 +244,7 @@ elseif GammaKnown == 0
         mu = (kappa0/(kappa0+s))*mu0 + (s/(kappa0+s))*Yn;
         temp = (Yn-mu0)'*(Yn-mu0);
         Sigma = Sigma0 + S + (kappa0*s/(kappa0+s))*temp;
+        
         % In case Sigma becomes singular due to numerical error.
         minEig = min(eig(Sigma));
         fprintf('Min eigenvalue of Sigma before adjuested: %d \n', minEig);
@@ -257,19 +253,19 @@ elseif GammaKnown == 0
             minEig = min(eig(Sigma));
             fprintf('Min eigenvalue of Sigma after adjuested: %d \n', minEig);
         end
-        
-        % GENERATE NEW SAMPLES FROM POSTERIOR
+
         c = nu-r+1;
         Lambda = Sigma./(kappa*c);
         Lambdahalf = sqrtm(Lambda);
-        Trand =  mvtrnd(eye(r), c, K); % generate new samples, size K-by-r
-        Y = Trand*Lambdahalf + ones(K,1)*mu;
         
         % DIFFERENT METHODS
         switch method
             % Vanilla MC --------------------------------------------------
             case 0
                 tic;
+                % Generate new samples from posterior
+                Trand =  mvtrnd(eye(r), c, K);
+                Y = Trand*Lambdahalf + ones(K,1)*mu;
                 Ind = IndConvexVanillaMC(Y, x);
                 [ phat(n), stdev(n), half(n) ] = MonteCarlo(Ind);
                 time(n) = toc;
@@ -285,6 +281,9 @@ elseif GammaKnown == 0
                 % the first initialItn iterations
                 if (n <= initialItn) || ...
                         (mod((n - initialItn), probUpdate) == 0)
+                    % Generate new samples from posterior
+                    Trand =  mvtrnd(eye(r), c, K);
+                    Y = Trand*Lambdahalf + ones(K,1)*mu;
                     [ p, I ] = pnConvexCondMC( Trand, x, mu, Lambdahalf, ...
                                                nu, GammaKnown );
                     last_mu = mu;
@@ -310,20 +309,24 @@ elseif GammaKnown == 0
             case 2
                 tic;
                 if (n <= initialItn) || (mod((n-initialItn),probUpdate)==0)
+                    % Generate new samples from posterior
+                    Trand =  mvtrnd(eye(r), c, K);
+                    Y = Trand*Lambdahalf + ones(K,1)*mu;
+                    % Calculate the indicators
                     I =  IndConvexVanillaMC(Y, x);
+                    % Record the last parameters
                     last_mu = mu;
                     last_Sigma = Sigma;
                     last_kappa = kappa;
                     last_nu = nu;
                     last_I = I;
-                    [ phat(n), stdev(n), half(n)] = MonteCarlo( I );
                 else
                     LR = LRstudentt( Y, last_mu, last_Sigma, ...
                                      last_kappa, last_nu, mu, Sigma, ...
                                      kappa, nu );
                     I = LR .* last_I;
-                    [ phat(n), stdev(n), half(n)] = MonteCarlo( I );
                 end
+                [ phat(n), stdev(n), half(n)] = MonteCarlo( I );
                 time(n) = toc;
                 efficiency(n) = 1/(time(n) * stdev(n)^2);
                 fprintf('CI for Pconvex: %.2e +/- %.2e. \n', phat(n), half(n));
@@ -334,31 +337,25 @@ elseif GammaKnown == 0
             case 3
                 tic;
                 rej = 0;
-                est = zeros(K,1);
-                l = mod((n - initialItn), probUpdate);
-                if (n <= initialItn) || (l == 0)
+                if (n <= initialItn) || (mod((n-initialItn),probUpdate)==0)
+                    % Generate new samples from posterior
+                    Trand =  mvtrnd(eye(r), c, K);
+                    Y = Trand*Lambdahalf + ones(K,1)*mu;
                     % Record the last estimators when a complete new set of
                     % samples was obtained.
                     est = IndConvexVanillaMC(Y, x);
-                    last_est = est;
-                    last_Y = Y;
-                    last_mu = mu;
-                    last_kappa = kappa;
-                    last_nu = nu;
-                    last_Sigma = Sigma;
-                else                
-                    [ratio, c] = ARParam_StudentT(l, last_Y, last_mu, last_kappa, last_nu, last_Sigma, mu, kappa, nu, Sigma);   
+                else
+                    % Between every probUpdate iterations, perform A/R on 
+                    % the samples from the last iteration.
+                    [ratio, c] = ARParam_StudentT(1, Y, mu0, kappa0, nu0, Sigma0, mu, kappa, nu, Sigma);   
                     rej = 0;
                     for k = 1:K
                         if rand() > ratio(k) / c
                             % Reject: generate a new sample and calculate the
                             % regarding indicator.
-                            new_sample = mvtrnd(eye(r), c, 1)*Lambdahalf + mu;
-                            est(k) = IndConvexVanillaMC(new_sample, x);
+                            Y(k, :) = mvtrnd(eye(r), c, 1)*Lambdahalf + mu;
+                            est(k) = IndConvexVanillaMC(Y(k, :), x);
                             rej = rej + 1;
-                        else
-                            % Accept: reuse the old indicator.
-                            est(k) = last_est(k);
                         end
                     end
                 end
@@ -372,7 +369,7 @@ elseif GammaKnown == 0
 
         end % end of switch cases for method
       
-        % Use the posterior as the prior for next itn
+        % Use the posterior as the prior for next iteration
         mu0 = mu;
         kappa0 = kappa;
         nu0 = nu;
@@ -383,4 +380,3 @@ elseif GammaKnown == 0
 end % end of if for GammaKnown
 
 end
-

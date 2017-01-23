@@ -99,9 +99,7 @@ if GammaKnown == 1
         % Lambda = Lambda0 - temp*Lambda0;
         % mu = (mu0' + temp*(Yn-mu0)')';
         
-        % GENERATE NEW SAMPLES FROM THE POSTERIOR
-        Nrand =  mvnrnd(zeros(1,r),eye(r),K);
-        % In case Sigma becomes singular due to numerical error.
+        % In case Lambda becomes singular due to numerical error.
         minEig = min(eig(Lambda));
         fprintf('Min eigenvalue of Lambda before adjuested: %d \n', minEig);
         while minEig < 0

@@ -57,8 +57,7 @@ x = zeros(d, r);
 for i = 1:nSampleLines
     D = mvnrnd(zeros(d, 1),eye(d))';
     D = D ./ norm(D, 2);
-    center = 0.5*ones(d,1); 
-    %xlb + rand(d,1) .* (xub - xlb);
+    center = xlb + rand(d,1) .* (xub - xlb);
     maxt = zeros(d, 1);
     mint = zeros(d, 1);
     for j = 1:d

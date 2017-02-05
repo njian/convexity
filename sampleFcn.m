@@ -42,7 +42,7 @@ end
 B = 0.01 * (tril(B, -1) + tril(B, -1)');
 % Gamma constructed by ones on the diagonal and B off-diagonal, scaled by
 % scaleGamma
-scaleGamma = 1e-4;
+scaleGamma = 1e-2;
 Gamma = scaleGamma * (eye(r) + B);
 
 %% Test functions

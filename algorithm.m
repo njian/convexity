@@ -72,13 +72,14 @@ fprintf('=======================START ITERATIONS========================\n')
 %% When the sampling covariance Gamma is known: Normal-Normal case.
 if GammaKnown == 1
     iGamma = inv(Gamma);    
-    n=1;
+    n = 1;
     while (n <= maxIte)
         fprintf('Iteration %d: \n', n);
         
         Yn = sampleFcn(x, s);  % new samples
+        % If there are multiple samples, convert to mean r-by-1 vector
         if s ~= 1
-            Yn = mean(Yn);
+            Yn = mean(Yn, 1);
         end
         
         % WITH ORIGINAL FORMULA
@@ -237,8 +238,8 @@ elseif GammaKnown == 0
             for i = 1:s
                 S = S + (Yn(i,:) - mean(Yn))'*(Yn(i,:) - mean(Yn));
             end
+            Yn = mean(Yn, 1); % convert to mean r-by-1 vector
         end
-        Yn = mean(Yn);
         kappa = kappa0 + s;
         nu = nu0 + s;
         mu = (kappa0/(kappa0+s))*mu0 + (s/(kappa0+s))*Yn;

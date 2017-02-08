@@ -60,9 +60,11 @@ if method ~= 0
     prompt = 'Please enter the initial number of iterations WITHOUT reusing samples:\n (integer >= 1, default = 10) \n';
     initialItn = input(prompt);
     checkPrompt(initialItn, 'positiveInteger');
-    prompt = 'And the samples from an earlier iteration will be reused for this many iterations:\n (integer >=1, 1 means to generate new samples every iteration) \n';
-    probUpdate = input(prompt);
-    checkPrompt(probUpdate, 'positiveInteger');
+    if method ~= 3
+        prompt = 'And the samples from an earlier iteration will be reused for this many iterations:\n (integer >=1, 1 means to generate new samples every iteration) \n';
+        probUpdate = input(prompt);
+        checkPrompt(probUpdate, 'positiveInteger');
+    end
 end
 fprintf('========================SETUP INFO=============================\n')
 fprintf('maxIte = %d, K = %d, method = %d. \n', maxIte, K, method);
@@ -183,9 +185,9 @@ if GammaKnown == 1
             case 3
                 tic;
                 rej = 0;
-                % For the first initialItn, use newly generated set of 
+                % For the first few iterations, use newly generated set of 
                 % samples to calculate the estimators.
-                if (n <= initialItn) || (mod((n-initialItn),probUpdate)==0)
+                if n <= initialItn
                     % Generate new samples from posterior
                     Nrand =  mvnrnd(zeros(1,r),eye(r),K);
                     Y = Nrand*Lambdahalf + ones(K,1)*mu;
@@ -338,7 +340,9 @@ elseif GammaKnown == 0
             case 3
                 tic;
                 rej = 0;
-                if (n <= initialItn) || (mod((n-initialItn),probUpdate)==0)
+                % For the first few iterations, use newly generated set of 
+                % samples to calculate the estimators.
+                if n <= initialItn
                     % Generate new samples from posterior
                     Trand =  mvtrnd(eye(r), c, K);
                     Y = Trand*Lambdahalf + ones(K,1)*mu;
@@ -346,8 +350,7 @@ elseif GammaKnown == 0
                     % samples was obtained.
                     est = IndConvexVanillaMC(Y, x);
                 else
-                    % Between every probUpdate iterations, perform A/R on 
-                    % the samples from the last iteration.
+                    % Perform A/R on the samples from the last iteration.
                     [ratio, c] = ARParam_StudentT(1, Y, mu0, kappa0, nu0, Sigma0, mu, kappa, nu, Sigma);   
                     rej = 0;
                     for k = 1:K

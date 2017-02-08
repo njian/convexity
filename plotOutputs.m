@@ -23,7 +23,7 @@ set(findall(figureHandle,'type','text'),'fontSize',40,'fontWeight','normal')
 hold off;
 saveas(h1, [pwd, '\outputs\', fileName, '_phat.fig']);
 
-% Plot the estimated probability of convex
+% Plot the iteration time
 h2 = figure;
 hold on;
 axis auto;
@@ -36,7 +36,7 @@ set(findall(figureHandle,'type','text'),'fontSize',40,'fontWeight','normal')
 hold off;
 saveas(h2, [pwd, '\outputs\', fileName, '_time.fig']);
 
-% Plot the estimated probability of convex
+% Plot the iteration efficiency
 h3 = figure;
 hold on;
 axis auto;

@@ -1,4 +1,4 @@
-%----------------********************************--------------------------
+prin%----------------********************************--------------------------
 % ARParam_StudentT.m
 % Description:
 %   Calculate the maximum likelihood ratio of two T densities.
@@ -19,7 +19,6 @@ ratio = zeros(1,K);
 
 % Numerically maximize LRstudentt (or minimize its negative)
 LRratio = @(y) - LRstudentt(y, mu0, Sigma0, kappa0, nu0, mu, Sigma, kappa, nu);
-options = optimset('MaxFunEvals', Inf, 'Display', 'notify');
 [~, C, exitflag, output] = fminsearch(LRratio, 1, options);
 C = -C;
 

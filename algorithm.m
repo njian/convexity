@@ -351,10 +351,10 @@ elseif GammaKnown == 0
                     est = IndConvexVanillaMC(Y, x);
                 else
                     % Perform A/R on the samples from the last iteration.
-                    [ratio, c] = ARParam_StudentT(1, Y, mu0, kappa0, nu0, Sigma0, mu, kappa, nu, Sigma);   
+                    [ratio, c, heavytail] = ARParam_StudentT(1, Y, mu0, kappa0, nu0, Sigma0, mu, kappa, nu, Sigma);   
                     rej = 0;
                     for k = 1:K
-                        if rand() > ratio(k) / c
+                        if (rand() > ratio(k) / c) || (heavytail == 1)
                             % Reject: generate a new sample and calculate the
                             % regarding indicator.
                             Y(k, :) = mvtrnd(eye(r), c, 1)*Lambdahalf + mu;

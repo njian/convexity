@@ -21,7 +21,7 @@ ratio = zeros(1,K);
 
 % Numerically maximize LRstudentt (or minimize its negative)
 LRratio = @(y) - LRstudentt(y, mu0, Sigma0, kappa0, nu0, mu, Sigma, kappa, nu);
-options = optimset('MaxFunEvals', 1e3, 'MaxIter', 1e3, 'Display', 'notify');
+options = optimset('MaxFunEvals', 1e10, 'MaxIter', 1e10, 'Display', 'notify');
 [~, C, exitflag, output] = fminsearch(LRratio, 1, options);
 C = -C;
 
